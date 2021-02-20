@@ -197,13 +197,13 @@ function testVim(name, run, opts, expectedFail) {
       }
     }
     function fakeOpenDialog(result) {
-      return function(text, callback) {
+      return function(template, callback) {
         return callback(result);
       }
     }
     function fakeOpenNotification(matcher) {
-      return function(text) {
-        matcher(text);
+      return function(template) {
+        matcher(template.innerHTML);
       }
     }
     var helpers = {
@@ -3168,6 +3168,13 @@ testVim(':_register', function(cm,vim,helpers) {
   });
   helpers.doKeys(':');
 }, {value: ''});
+testVim('registers_html_encoding', function(cm,vim,helpers) {
+  helpers.doKeys('y', 'y');
+  cm.openNotification = helpers.fakeOpenNotification(function(text) {
+    is(/"\s+&lt;script&gt;throw "&amp;amp;"&lt;\/script&gt;/.test(text));
+  });
+  helpers.doEx('registers');
+}, {value: '<script>throw "&amp;"</script>'});
 testVim('search_register_escape', function(cm, vim, helpers) {
   // Check that the register is restored if the user escapes rather than confirms.
   cm.openDialog = helpers.fakeOpenDialog('waldo');
@@ -4063,10 +4070,22 @@ testVim('ex_sort_pattern_alpha_num', function(cm, vim, helpers) {
 testVim('ex_global', function(cm, vim, helpers) {
   cm.setCursor(0, 0);
   helpers.doEx('g/one/s//two');
-  eq('two two\n two two\n two two', cm.getValue());
+  eq('two one\n two one\n two one', cm.getValue());
   helpers.doEx('1,2g/two/s//one');
-  eq('one one\n one one\n two two', cm.getValue());
+  eq('one one\n one one\n two one', cm.getValue());
+  cm.openNotification = helpers.fakeOpenNotification(function(text) {
+    eq(' one one\n two one', text);
+  });
+  helpers.doEx('g/^ /');
 }, {value: 'one one\n one one\n one one'});
+testVim('ex_global_substitute_join', function(cm, vim, helpers) {
+  helpers.doEx('g/o/s/\\n/;');
+  eq('one;two\nthree\nfour;five\n', cm.getValue());
+}, {value: 'one\ntwo\nthree\nfour\nfive\n'});
+testVim('ex_global_substitute_split', function(cm, vim, helpers) {
+  helpers.doEx('g/e/s/[or]/\\n');
+  eq('\nne\ntwo\nth\nee\nfour\nfive\n', cm.getValue());
+}, {value: 'one\ntwo\nthree\nfour\nfive\n'});
 testVim('ex_global_confirm', function(cm, vim, helpers) {
   cm.setCursor(0, 0);
   var onKeyDown;
@@ -4300,10 +4319,26 @@ testSubstitute('ex_substitute_newline_match', {
   value: 'one,two \n three,four',
   expectedValue: 'one,two , three,four',
   expr: '%s/\\n/,/g'});
+testSubstitute('ex_substitute_newline_join_global', {
+  value: 'one,two \n three,four \n five \n six',
+  expectedValue: 'one,two \n three,four , five \n six',
+  expr: '2s/\\n/,/g'});
+testSubstitute('ex_substitute_newline_join_noglobal', {
+  value: 'one,two \n three,four \n five \n six\n',
+  expectedValue: 'one,two \n three,four , five , six\n',
+  expr: '2,3s/\\n/,/'});
 testSubstitute('ex_substitute_newline_replacement', {
-  value: 'one,two \n three,four',
-  expectedValue: 'one\ntwo \n three\nfour',
+  value: 'one,two, \n three,four,',
+  expectedValue: 'one\ntwo\n \n three\nfour\n',
   expr: '%s/,/\\n/g'});
+testSubstitute('ex_substitute_newline_multiple_splits', {
+  value: 'one,two, \n three,four,five,six, \n seven,',
+  expectedValue: 'one,two, \n three\nfour\nfive\nsix\n \n seven,',
+  expr: '2s/,/\\n/g'});
+testSubstitute('ex_substitute_newline_first_occurrences', {
+  value: 'one,two, \n three,four,five,six, \n seven,',
+  expectedValue: 'one\ntwo, \n three\nfour,five,six, \n seven\n',
+  expr: '%s/,/\\n/'});
 testSubstitute('ex_substitute_braces_word', {
   value: 'ababab abb ab{2}',
   expectedValue: 'ab abb ab{2}',
