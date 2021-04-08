@@ -244,6 +244,7 @@
     { name: 'yank', shortName: 'y' },
     { name: 'delmarks', shortName: 'delm' },
     { name: 'registers', shortName: 'reg', excludeFromCommandHistory: true },
+    { name: 'vglobal', shortName: 'v' },
     { name: 'global', shortName: 'g' }
   ];
 
@@ -353,7 +354,7 @@
       return cmd;
     }
 
-    var modifiers = {'Shift': 'S', 'Ctrl': 'C', 'Alt': 'A', 'Cmd': 'D', 'Mod': 'A'};
+    var modifiers = {Shift:'S',Ctrl:'C',Alt:'A',Cmd:'D',Mod:'A',CapsLock:''};
     var specialKeys = {Enter:'CR',Backspace:'BS',Delete:'Del',Insert:'Ins'};
     function cmKeyToVimKey(key) {
       if (key.charAt(0) == '\'') {
@@ -5018,6 +5019,10 @@
         }
         cm.replaceRange(text.join('\n'), curStart, curEnd);
       },
+      vglobal: function(cm, params) {
+        // global inspects params.commandName
+        this.global(cm, params);
+      },
       global: function(cm, params) {
         // a global command is of the form
         // :[range]g/pattern/[cmd]
@@ -5027,6 +5032,7 @@
           showConfirm(cm, 'Regular Expression missing from global');
           return;
         }
+        var inverted = params.commandName[0] === 'v';
         // range is specified here
         var lineStart = (params.line !== undefined) ? params.line : cm.firstLine();
         var lineEnd = params.lineEnd || params.line || cm.lastLine();
@@ -5055,7 +5061,7 @@
         for (var i = lineStart; i <= lineEnd; i++) {
           var line = cm.getLineHandle(i);
           var matched = query.test(line.text);
-          if (matched) {
+          if (matched !== inverted) {
             matchedLines.push(cmd ? line : line.text);
           }
         }
@@ -5097,9 +5103,11 @@
               regexPart = new RegExp(regexPart).source; //normalize not escaped characters
           }
           replacePart = tokens[1];
-          if (regexPart && regexPart[regexPart.length - 1] === '$') {
-            regexPart = regexPart.slice(0, regexPart.length - 1) + '\\n';
-            replacePart = replacePart ? replacePart + '\n' : '\n';
+          // If the pattern ends with $ (line boundary assertion), change $ to \n.
+          // Caveat: this workaround cannot match on the last line of the document.
+          if (/(^|[^\\])(\\\\)*\$$/.test(regexPart)) {
+            regexPart = regexPart.slice(0, -1) + '\\n';
+            replacePart = (replacePart || '') + '\n';
           }
           if (replacePart !== undefined) {
             if (getOption('pcre')) {
@@ -5128,11 +5136,9 @@
           if (flagsPart) {
             if (flagsPart.indexOf('c') != -1) {
               confirm = true;
-              flagsPart.replace('c', '');
             }
             if (flagsPart.indexOf('g') != -1) {
               global = true;
-              flagsPart.replace('g', '');
             }
             if (getOption('pcre')) {
                regexPart = regexPart + '/' + flagsPart;

@@ -293,6 +293,7 @@
       }
     }
     var overlapX = box.right - winW;
+    if (scrolls) overlapX += cm.display.nativeBarWidth;
     if (overlapX > 0) {
       if (box.right - box.left > winW) {
         hints.style.width = (winW - 5) + "px";
@@ -360,7 +361,7 @@
     close: function() {
       if (this.completion.widget != this) return;
       this.completion.widget = null;
-      this.hints.parentNode.removeChild(this.hints);
+      if (this.hints.parentNode) this.hints.parentNode.removeChild(this.hints);
       this.completion.cm.removeKeyMap(this.keyMap);
 
       var cm = this.completion.cm;
